@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#111827">
+  <title>TaskFlow — To-Do List</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#141c31; --panel2:#1b2740; --text:#eef2ff; --muted:#9aa8c7; --accent:#8b9cff; --line:#293653; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; padding:48px 18px; font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--text); background:radial-gradient(circle at 15% 0%,#202b50 0,transparent 36%),var(--bg); }
+    .app { width:min(720px,100%); margin:0 auto; }
+    .eyebrow { color:var(--accent); font-size:.78rem; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
+    h1 { margin:10px 0 8px; font-size:clamp(2rem,6vw,3.2rem); letter-spacing:-.05em; }
+    .subtitle { color:var(--muted); margin:0 0 28px; }
+    .panel { background:rgba(20,28,49,.94); border:1px solid var(--line); border-radius:22px; padding:22px; box-shadow:0 24px 70px #0005; }
+    form { display:flex; gap:10px; }
+    input[type=text] { min-width:0; flex:1; padding:14px 15px; border:1px solid var(--line); border-radius:12px; background:#0d1528; color:var(--text); font:inherit; outline:none; }
+    input[type=text]:focus { border-color:var(--accent); box-shadow:0 0 0 3px #8b9cff22; }
+    button { border:0; border-radius:12px; padding:12px 17px; font:inherit; font-weight:700; cursor:pointer; transition:transform .15s,opacity .15s,background .15s; }
+    button:hover { transform:translateY(-1px); } button:disabled { opacity:.5; cursor:not-allowed; }
+    .add { background:var(--accent); color:#10162b; }
+    .stats { display:flex; justify-content:space-between; gap:12px; margin:22px 2px 12px; color:var(--muted); font-size:.9rem; }
+    .filters { display:flex; gap:7px; }
+    .filter { padding:7px 11px; background:transparent; color:var(--muted); font-size:.83rem; }
+    .filter.active { color:var(--text); background:var(--panel2); }
+    ul { list-style:none; margin:0; padding:0; display:grid; gap:9px; }
+    li { display:flex; align-items:center; gap:12px; padding:13px; border:1px solid var(--line); border-radius:14px; background:#10192d; }
+    .check { width:19px; height:19px; accent-color:var(--accent); flex:none; cursor:pointer; }
+    .task-text { flex:1; min-width:0; overflow-wrap:anywhere; line-height:1.45; }
+    li.done .task-text { color:#7f8ba7; text-decoration:line-through; }
+    .delete { padding:8px 10px; color:#ff9caa; background:#ff647b12; font-size:.82rem; }
+    .empty { padding:35px 12px; text-align:center; color:var(--muted); border:1px dashed var(--line); border-radius:14px; }
+    .message { min-height:20px; margin:10px 2px 0; color:#ff9caa; font-size:.85rem; }
+    .footer { margin-top:18px; text-align:center; color:#71809f; font-size:.8rem; }
+    @media(max-width:520px) { body{padding:30px 13px} .panel{padding:15px} form{flex-direction:column} .add{width:100%} .stats{align-items:flex-start;flex-direction:column} }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="eyebrow">Your personal workspace</div>
+    <h1>Make today count.</h1>
+    <p class="subtitle">A simple place to capture tasks and keep moving forward.</p>
+    <section class="panel" aria-label="Task manager">
+      <form id="task-form">
+        <input id="task-input" type="text" maxlength="200" placeholder="What needs to get done?" autocomplete="off" required aria-label="New task">
+        <button class="add" type="submit">＋ Add task</button>
+      </form>
+      <div class="message" id="message" role="status" aria-live="polite"></div>
+      <div class="stats">
+        <span id="count">Loading tasks…</span>
+        <div class="filters" aria-label="Filter tasks">
+          <button class="filter active" data-filter="all" type="button">All</button>
+          <button class="filter" data-filter="active" type="button">Active</button>
+          <button class="filter" data-filter="completed" type="button">Completed</button>
+        </div>
+      </div>
+      <ul id="tasks"></ul>
+    </section>
+    <div class="footer">Tasks are saved automatically on this device.</div>
+  </main>
+  <script>
+    const list = document.getElementById('tasks');
+    const form = document.getElementById('task-form');
+    const input = document.getElementById('task-input');
+    const count = document.getElementById('count');
+    const message = document.getElementById('message');
+    let tasks = [];
+    let currentFilter = 'all';
+
+    async function request(url, options = {}) {
+      const response = await fetch(url, options);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Request failed.');
+      return data;
+    }
+
+    function render() {
+      list.replaceChildren();
+      const completed = tasks.filter(task => task.completed).length;
+      const remaining = tasks.length - completed;
+      count.textContent = `${remaining} remaining · ${completed} completed · ${tasks.length} total`;
+      const visible = tasks.filter(task => currentFilter === 'all' || (currentFilter === 'active' && !task.completed) || (currentFilter === 'completed' && task.completed));
+      if (!visible.length) {
+        const empty = document.createElement('li');
+        empty.className = 'empty';
+        empty.textContent = tasks.length ? 'Nothing in this filter yet.' : 'You’re all clear. Add your first task above.';
+        list.appendChild(empty);
+        return;
+      }
+      for (const task of visible) {
+        const item = document.createElement('li');
+        if (task.completed) item.classList.add('done');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox'; checkbox.className = 'check'; checkbox.checked = task.completed;
+        checkbox.setAttribute('aria-label', `Mark ${task.text} ${task.completed ? 'active' : 'completed'}`);
+        checkbox.addEventListener('change', async () => {
+          checkbox.disabled = true;
+          try { await request(`/api/tasks/${encodeURIComponent(task.id)}/toggle`, { method:'POST' }); await loadTasks(); }
+          catch (error) { showMessage(error.message); checkbox.disabled = false; }
+        });
+        const label = document.createElement('span'); label.className = 'task-text'; label.textContent = task.text;
+        const del = document.createElement('button'); del.type = 'button'; del.className = 'delete'; del.textContent = 'Delete';
+        del.addEventListener('click', async () => {
+          del.disabled = true;
+          try { await request(`/api/tasks/${encodeURIComponent(task.id)}`, { method:'DELETE' }); await loadTasks(); }
+          catch (error) { showMessage(error.message); del.disabled = false; }
+        });
+        item.append(checkbox, label, del); list.appendChild(item);
+      }
+    }
+
+    function showMessage(text = '') { message.textContent = text; }
+    async function loadTasks() { tasks = await request('/api/tasks'); render(); }
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text) return showMessage('Please enter a task.');
+      const submit = form.querySelector('button'); submit.disabled = true; showMessage();
+      try {
+        await request('/api/tasks', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text}) });
+        input.value = ''; currentFilter = 'all';
+        document.querySelectorAll('.filter').forEach(button => button.classList.toggle('active', button.dataset.filter === 'all'));
+        await loadTasks(); input.focus();
+      } catch (error) { showMessage(error.message); }
+      finally { submit.disabled = false; }
+    });
+
+    document.querySelectorAll('.filter').forEach(button => button.addEventListener('click', () => {
+      currentFilter = button.dataset.filter;
+      document.querySelectorAll('.filter').forEach(item => item.classList.toggle('active', item === button));
+      render();
+    }));
+
+    loadTasks().catch(error => showMessage(error.message));
+  </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "taskflow-todo-list",
+  "version": "1.0.0",
+  "description": "A persistent To-Do List application built with Node.js and a browser interface",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" }
+}

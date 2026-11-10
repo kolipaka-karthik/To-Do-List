@@ -1,0 +1,14 @@
+[
+  {
+    "id": "1794326573277-d9b88d",
+    "text": "Java course",
+    "completed": true,
+    "createdAt": "2026-11-10T16:02:53.277Z"
+  },
+  {
+    "id": "1794326306754-f3bbee",
+    "text": "Complete Java Assignment",
+    "completed": false,
+    "createdAt": "2026-11-10T15:58:26.755Z"
+  }
+]
